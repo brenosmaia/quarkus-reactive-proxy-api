@@ -14,9 +14,8 @@ public class PaymentResponseDTO {
     private String status;
     private String message;
     
-    public PaymentResponseDTO(String correlationId, String amount, String status) {
+    public PaymentResponseDTO(String correlationId, String amount) {
         this.correlationId = correlationId;
         this.amount = amount;
-        this.status = status;
     }
 }
