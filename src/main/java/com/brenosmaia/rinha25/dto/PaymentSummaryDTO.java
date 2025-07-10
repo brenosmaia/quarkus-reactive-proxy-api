@@ -9,8 +9,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class PaymentSummaryDTO {
 
-    private String correlationId;
-    private String amount;
+    private Integer defaultTotalRequests;
+    private String fallbaTotalRequests;
     private String status;
     private String createdAt;
     private String updatedAt;

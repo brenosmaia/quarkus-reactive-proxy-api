@@ -16,3 +16,15 @@ springdoc:
     path: /
   api-docs:
     path: /api-docs
+
+payment:
+  default:
+    url: "http://localhost:8001/payments"
+  fallback:
+    url: "http://localhost:8002/payments"
+    
+payments-summary:
+  default:
+    url: "http://localhost:8001/admin/payments-summary"
+  fallback:
+    url: "http://localhost:8002/admin/payments-summary"
