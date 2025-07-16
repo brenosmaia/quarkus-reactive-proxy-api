@@ -1,29 +1,43 @@
 package com.brenosmaia.rinha25.model;
 
-import jakarta.persistence.*;
+import io.quarkus.hibernate.orm.panache.PanacheEntity;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
-import java.time.LocalDateTime;
 
 @Entity(name = "payments")
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class Payment {
+public class Payment extends PanacheEntity {
 
-	@Id
-	@GeneratedValue(strategy = GenerationType.IDENTITY)
-	private Long id;
-	
-	@Column(nullable = false, unique = true)
-	@NotBlank
-	private String correlationId;
-	
-	@Column(nullable = false)
-	@NotNull
-	private String amount;
+    @Column(nullable = false, unique = true)
+    @NotBlank
+    private String correlationId;
+
+    @Column(nullable = false)
+    @NotNull
+    private String amount;
+
+    public Payment() {
+    }
+
+    public Payment(String correlationId, String amount) {
+        this.correlationId = correlationId;
+        this.amount = amount;
+    }
+
+    public String getCorrelationId() {
+        return correlationId;
+    }
+
+    public void setCorrelationId(String correlationId) {
+        this.correlationId = correlationId;
+    }
+
+    public String getAmount() {
+        return amount;
+    }
+
+    public void setAmount(String amount) {
+        this.amount = amount;
+    }
 }

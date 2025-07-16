@@ -4,15 +4,6 @@ import java.math.BigDecimal;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
 public class PaymentsSummaryResponseDTO {
 
 	@JsonProperty("default")
@@ -20,12 +11,56 @@ public class PaymentsSummaryResponseDTO {
 	@JsonProperty("fallback")
 	private ProcessorStatsDTO fallbackStats;
 	
-	@Data
-	@AllArgsConstructor
-	@NoArgsConstructor
-	@Builder
+	public PaymentsSummaryResponseDTO() {
+	}
+	
+	public PaymentsSummaryResponseDTO(ProcessorStatsDTO defaultStats, ProcessorStatsDTO fallbackStats) {
+		this.defaultStats = defaultStats;
+		this.fallbackStats = fallbackStats;
+	}
+	
+	public ProcessorStatsDTO getDefaultStats() {
+		return defaultStats;
+	}
+
+	public void setDefaultStats(ProcessorStatsDTO defaultStats) {
+		this.defaultStats = defaultStats;
+	}
+	
+	public ProcessorStatsDTO getFallbackStats() {
+		return fallbackStats;
+	}
+	
+	public void setFallbackStats(ProcessorStatsDTO fallbackStats) {
+        this.fallbackStats = fallbackStats;
+    }
+	
 	public static class ProcessorStatsDTO {
 		private int totalRequests;
 		private BigDecimal totalAmount;
+		
+		public ProcessorStatsDTO() {
+		}
+		
+		public ProcessorStatsDTO(int totalRequests, BigDecimal totalAmount) {
+			this.totalRequests = totalRequests;
+			this.totalAmount = totalAmount;
+		}
+		
+		public int getTotalRequests() {
+			return totalRequests;
+		}
+		
+		public void setTotalRequests(int totalRequests) {
+			this.totalRequests = totalRequests;
+		}
+		
+		public BigDecimal getTotalAmount() {
+			return totalAmount;
+		}
+		
+		public void setTotalAmount(BigDecimal totalAmount) {
+            this.totalAmount = totalAmount;
+        }
 	}
 }

@@ -1,15 +1,27 @@
 package com.brenosmaia.rinha25.repository;
 
 import com.brenosmaia.rinha25.model.Payment;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
+import io.quarkus.hibernate.orm.panache.PanacheRepository;
+import jakarta.enterprise.context.ApplicationScoped;
 
 import java.util.Optional;
 
-@Repository
-public interface PaymentRepository extends JpaRepository<Payment, Long> {
+@ApplicationScoped
+public class PaymentRepository implements PanacheRepository<Payment> {
 
-    Optional<Payment> findByCorrelationId(String correlationId);
+    public Optional<Payment> findByCorrelationId(String correlationId) {
+        return find("correlationId", correlationId).firstResultOptional();
+    }
     
-    boolean existsByCorrelationId(String correlationId);
-} 
+    public boolean existsByCorrelationId(String correlationId) {
+        return count("correlationId", correlationId) > 0;
+    }
+    
+    public Payment save(Payment payment) {
+        if (payment == null) {
+            throw new IllegalArgumentException("Payment cannot be null");
+        }
+        persist(payment);
+        return payment;
+    }
+}
