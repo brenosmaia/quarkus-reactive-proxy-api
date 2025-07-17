@@ -63,10 +63,9 @@
     
     <!-- REST Client -->
     <dependency>
-      <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-rest-client</artifactId>
-    </dependency>
-    
+	  	<groupId>io.quarkus</groupId>
+	 	<artifactId>quarkus-rest-client-reactive</artifactId>
+	</dependency>
     <!-- Validation -->
     <dependency>
       <groupId>io.quarkus</groupId>

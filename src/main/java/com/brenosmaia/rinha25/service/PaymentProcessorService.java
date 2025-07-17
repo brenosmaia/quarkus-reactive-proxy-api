@@ -12,6 +12,8 @@ import com.brenosmaia.rinha25.dto.PaymentRequestDTO;
 import com.brenosmaia.rinha25.dto.PaymentsSummaryResponseDTO;
 import com.brenosmaia.rinha25.dto.PaymentsSummaryResponseDTO.ProcessorStatsDTO;
 
+import io.smallrye.mutiny.Uni;
+
 @ApplicationScoped
 public class PaymentProcessorService {
 
@@ -31,18 +33,17 @@ public class PaymentProcessorService {
 	@RestClient
 	FallbackPaymentsSummaryClient fallbackPaymentsSummary;
 	
-	public String processPayment(PaymentRequestDTO paymentRequest) {
-		try {
-			return defaultPaymentsProcessor.processPayment(paymentRequest);
-		} catch (Exception e) {
-			return fallbackPaymentsProcessor.processPayment(paymentRequest);
-		}
+	public Uni<String> processPayment(PaymentRequestDTO paymentRequest) {
+		return defaultPaymentsProcessor.processPayment(paymentRequest).onFailure()
+				.recoverWithUni(fallbackPaymentsProcessor.processPayment(paymentRequest));
 	}
 	
-	public PaymentsSummaryResponseDTO getPaymentsSummary(String from, String to) {
-		ProcessorStatsDTO defaultStats = defaultPaymentsSummary.getPaymentsSummary(from, to, "123");
-		ProcessorStatsDTO fallbackStats = fallbackPaymentsSummary.getPaymentsSummary(from, to, "123");
+	public Uni<PaymentsSummaryResponseDTO> getPaymentsSummary(String from, String to) {
+		Uni<ProcessorStatsDTO> defaultStats = defaultPaymentsSummary.getPaymentsSummary(from, to, "123");
+		Uni<ProcessorStatsDTO> fallbackStats = fallbackPaymentsSummary.getPaymentsSummary(from, to, "123");
 			
-		return new PaymentsSummaryResponseDTO(defaultStats, fallbackStats);
+		return Uni.combine().all().unis(defaultStats, fallbackStats)
+			        .asTuple()
+			        .map(tuple -> new PaymentsSummaryResponseDTO(tuple.getItem1(), tuple.getItem2()));
 	}
 }

@@ -14,5 +14,5 @@ public interface DefaultPaymentProcessorClient {
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    String processPayment(PaymentRequestDTO paymentRequest);
+    Uni<String> processPayment(PaymentRequestDTO paymentRequest);
 } 

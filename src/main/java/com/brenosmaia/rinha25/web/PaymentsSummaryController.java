@@ -7,6 +7,8 @@ import jakarta.ws.rs.core.Response;
 import com.brenosmaia.rinha25.dto.PaymentsSummaryResponseDTO;
 import com.brenosmaia.rinha25.service.PaymentProcessorService;
 
+import io.smallrye.mutiny.Uni;
+
 @Path("/payments-summary")
 @Produces(MediaType.APPLICATION_JSON)
 public class PaymentsSummaryController {
@@ -15,8 +17,7 @@ public class PaymentsSummaryController {
     PaymentProcessorService paymentProcessorService;
 
     @GET
-    public Response getPaymentsSummary(@QueryParam("from") String from, @QueryParam("to") String to) {
-        PaymentsSummaryResponseDTO response = paymentProcessorService.getPaymentsSummary(from, to);
-        return Response.ok(response).build();
+    public Uni<PaymentsSummaryResponseDTO> getPaymentsSummary(@QueryParam("from") String from, @QueryParam("to") String to) {
+        return paymentProcessorService.getPaymentsSummary(from, to);
     }
 }
