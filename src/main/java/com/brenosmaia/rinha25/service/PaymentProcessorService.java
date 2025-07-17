@@ -34,8 +34,9 @@ public class PaymentProcessorService {
 	FallbackPaymentsSummaryClient fallbackPaymentsSummary;
 	
 	public Uni<String> processPayment(PaymentRequestDTO paymentRequest) {
-		return defaultPaymentsProcessor.processPayment(paymentRequest).onFailure()
-				.recoverWithUni(fallbackPaymentsProcessor.processPayment(paymentRequest));
+		 return defaultPaymentsProcessor.processPayment(paymentRequest)
+			        .onFailure()
+			        .recoverWithUni(throwable -> fallbackPaymentsProcessor.processPayment(paymentRequest));
 	}
 	
 	public Uni<PaymentsSummaryResponseDTO> getPaymentsSummary(String from, String to) {
