@@ -1,13 +1,13 @@
 package com.brenosmaia.rinha25.client;
 
-import jakarta.ws.rs.*;
-import jakarta.ws.rs.core.MediaType;
 import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
 
+import com.brenosmaia.rinha25.dto.HealthCheckResponseDTO;
 import com.brenosmaia.rinha25.dto.PaymentRequestDTO;
-import com.brenosmaia.rinha25.dto.PaymentsSummaryResponseDTO.ProcessorStatsDTO;
 
 import io.smallrye.mutiny.Uni;
+import jakarta.ws.rs.*;
+import jakarta.ws.rs.core.MediaType;
 
 @Path("/payments")
 @RegisterRestClient(configKey = "DefaultPaymentProcessorClient")
@@ -17,4 +17,9 @@ public interface DefaultPaymentProcessorClient {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     Uni<String> processPayment(PaymentRequestDTO paymentRequest);
+
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    @Path("/service-health")
+    Uni<HealthCheckResponseDTO> getHealth();
 } 

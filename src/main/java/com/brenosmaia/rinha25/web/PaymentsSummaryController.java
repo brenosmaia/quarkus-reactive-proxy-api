@@ -3,7 +3,6 @@ package com.brenosmaia.rinha25.web;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.Response;
 import com.brenosmaia.rinha25.dto.PaymentsSummaryResponseDTO;
 import com.brenosmaia.rinha25.service.PaymentProcessorService;
 

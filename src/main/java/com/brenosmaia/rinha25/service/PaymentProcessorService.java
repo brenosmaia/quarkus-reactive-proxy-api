@@ -8,14 +8,18 @@ import com.brenosmaia.rinha25.client.DefaultPaymentProcessorClient;
 import com.brenosmaia.rinha25.client.DefaultPaymentsSummaryClient;
 import com.brenosmaia.rinha25.client.FallbackPaymentProcessorClient;
 import com.brenosmaia.rinha25.client.FallbackPaymentsSummaryClient;
+import com.brenosmaia.rinha25.config.RedisConfig;
 import com.brenosmaia.rinha25.dto.PaymentRequestDTO;
 import com.brenosmaia.rinha25.dto.PaymentsSummaryResponseDTO;
 import com.brenosmaia.rinha25.dto.PaymentsSummaryResponseDTO.ProcessorStatsDTO;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.smallrye.mutiny.Uni;
 
 @ApplicationScoped
 public class PaymentProcessorService {
+	private static final String PAYMENT_QUEUE_KEY = "paymentQueue";
 
 	@Inject
 	@RestClient
@@ -33,10 +37,48 @@ public class PaymentProcessorService {
 	@RestClient
 	FallbackPaymentsSummaryClient fallbackPaymentsSummary;
 	
+	private final ObjectMapper objectMapper = new ObjectMapper();
+
+	@Inject
+	HealthCheckService healthCheckService;
+
+	@Inject
+	RedisConfig redisConfig;
+
 	public Uni<String> processPayment(PaymentRequestDTO paymentRequest) {
-		 return defaultPaymentsProcessor.processPayment(paymentRequest)
-			        .onFailure()
-			        .recoverWithUni(throwable -> fallbackPaymentsProcessor.processPayment(paymentRequest));
+		 return healthCheckService.isDefaultPaymentProcessorHealthy()
+		 	.flatMap(isDefaultHealthy -> {
+				if (isDefaultHealthy) {
+					return defaultPaymentsProcessor.processPayment(paymentRequest);
+				}
+
+				return tryFallbackOrQueue(paymentRequest);
+			});
+	}
+
+	private Uni<String> tryFallbackOrQueue(PaymentRequestDTO paymentRequest) {
+		return healthCheckService.isFallbackPaymentProcessorHealthy()
+			.flatMap(isFallbackHealthy -> {
+				if (isFallbackHealthy) {
+					return fallbackPaymentsProcessor.processPayment(paymentRequest);
+				} else {
+					return addToQueue(paymentRequest)
+						.replaceWith("Payment queued for later processing");
+				}
+				
+			});
+	}
+
+	private Uni<Void> addToQueue(PaymentRequestDTO paymentRequest) {
+		try {
+			String json = objectMapper.writeValueAsString(paymentRequest);
+			return redisConfig.getReactiveRedisDataSource()
+				.list(String.class, String.class)
+				.lpush(PAYMENT_QUEUE_KEY, json)
+				.replaceWithVoid();
+		} catch (JsonProcessingException e) {
+			return Uni.createFrom().failure(new RuntimeException("Failed to serialize PaymentRequestDTO to JSON", e));
+		}
 	}
 	
 	public Uni<PaymentsSummaryResponseDTO> getPaymentsSummary(String from, String to) {

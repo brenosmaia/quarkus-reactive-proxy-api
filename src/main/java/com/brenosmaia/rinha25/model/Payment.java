@@ -1,5 +1,7 @@
 package com.brenosmaia.rinha25.model;
 
+import java.time.Instant;
+
 import io.quarkus.hibernate.orm.panache.PanacheEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -16,6 +18,10 @@ public class Payment extends PanacheEntity {
     @Column(nullable = false)
     @NotNull
     private String amount;
+    
+    @Column(nullable = false)
+    @NotNull
+    private Instant requestedAt;
 
     public Payment() {
     }
@@ -23,6 +29,7 @@ public class Payment extends PanacheEntity {
     public Payment(String correlationId, String amount) {
         this.correlationId = correlationId;
         this.amount = amount;
+        this.requestedAt = Instant.now();
     }
 
     public String getCorrelationId() {
@@ -40,4 +47,12 @@ public class Payment extends PanacheEntity {
     public void setAmount(String amount) {
         this.amount = amount;
     }
+
+	public Instant getRequestedAt() {
+		return requestedAt;
+	}
+
+	public void setRequestedAt(Instant requestedAt) {
+		this.requestedAt = requestedAt;
+	}
 }
