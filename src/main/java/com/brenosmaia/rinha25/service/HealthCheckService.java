@@ -6,8 +6,8 @@ import com.brenosmaia.rinha25.client.DefaultPaymentProcessorClient;
 import com.brenosmaia.rinha25.client.FallbackPaymentProcessorClient;
 import com.brenosmaia.rinha25.config.RedisConfig;
 
-import io.quarkus.redis.datasource.value.SetArgs;
 import io.quarkus.redis.datasource.value.ValueCommands;
+import io.quarkus.scheduler.Scheduled;
 import io.smallrye.mutiny.Uni;
 import jakarta.inject.Inject;
 
@@ -38,35 +38,33 @@ public class HealthCheckService {
         ValueCommands<String, String> redis = redisConfig.getRedisDataSource().value(String.class);
         String cachedValue = redis.get(DEFAULT_PROCESSOR_HEALTH_KEY);
 
-        if (cachedValue != null) {
-            return Uni.createFrom().item(Boolean.parseBoolean(cachedValue));
-        }
-
-        return defaultPaymentsProcessor.getHealth().onItem().transform(healthResponse -> {
-            boolean isHealthy = healthResponse != null && !healthResponse.isFailing();
-            cacheHealthStatus(DEFAULT_PROCESSOR_HEALTH_KEY, isHealthy);
-            return isHealthy;
-        });
+        return Uni.createFrom().item(Boolean.parseBoolean(cachedValue));
     }
 
     public Uni<Boolean> isFallbackPaymentProcessorHealthy() {
         ValueCommands<String, String> redis = redisConfig.getRedisDataSource().value(String.class);
         String cachedValue = redis.get(FALLBACK_PROCESSOR_HEALTH_KEY);
 
-        if (cachedValue != null) {
-            return Uni.createFrom().item(Boolean.parseBoolean(cachedValue));
-        }
-
-        return fallbackPaymentsProcessor.getHealth().onItem().transform(healthResponse -> {
-            boolean isHealthy = healthResponse != null && !healthResponse.isFailing();
-            cacheHealthStatus(FALLBACK_PROCESSOR_HEALTH_KEY, isHealthy);
-            return isHealthy;
-        });
+        return Uni.createFrom().item(Boolean.parseBoolean(cachedValue));
     }
 
     private void cacheHealthStatus(String key, boolean isHealthy) {
         ValueCommands<String, String> redis = redisConfig.getRedisDataSource().value(String.class);
-        SetArgs setArgs = new SetArgs().ex(5); // Expiration time set to 5 seconds
-        redis.set(key, String.valueOf(isHealthy), setArgs);
+        redis.set(key, String.valueOf(isHealthy));
+    }
+
+    @Scheduled(every = "5s")
+    public void refreshHealthStatus() {
+        defaultPaymentsProcessor.getHealth().onItem().transform(healthResponse -> {
+            boolean isHealthy = healthResponse != null && !healthResponse.isFailing();
+            cacheHealthStatus(DEFAULT_PROCESSOR_HEALTH_KEY, isHealthy);
+            return isHealthy;
+        });
+
+        fallbackPaymentsProcessor.getHealth().onItem().transform(healthResponse -> {
+            boolean isHealthy = healthResponse != null && !healthResponse.isFailing();
+            cacheHealthStatus(FALLBACK_PROCESSOR_HEALTH_KEY, isHealthy);
+            return isHealthy;
+        });
     }
 }
