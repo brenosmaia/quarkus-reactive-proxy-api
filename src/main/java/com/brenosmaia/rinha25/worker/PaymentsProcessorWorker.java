@@ -29,8 +29,6 @@ public class PaymentsProcessorWorker {
 
     @Scheduled(every = "5s")
     public void processQueue() {
-        logger.info("Starting to process payment queue...");
-
         try {
             // Recuperar uma lista de itens da fila
             Uni<List<String>> paymentDataList = redisConfig.getReactiveRedisDataSource()
@@ -40,7 +38,6 @@ public class PaymentsProcessorWorker {
             paymentDataList.subscribe().with(
                 dataList -> {
                     if (dataList.isEmpty()) {
-                        logger.info("No payments in the queue.");
                         return;
                     }
 
@@ -65,7 +62,5 @@ public class PaymentsProcessorWorker {
         } catch (Exception e) {
             logger.severe("Error processing payment queue: " + e.getMessage());
         }
-
-        logger.info("Payment queue processing completed.");
     }
 }

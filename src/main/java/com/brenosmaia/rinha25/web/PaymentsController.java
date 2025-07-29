@@ -4,10 +4,13 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+
+import java.time.Instant;
+
 import com.brenosmaia.rinha25.dto.PaymentRequestDTO;
 import com.brenosmaia.rinha25.service.PaymentProcessorService;
+import com.brenosmaia.rinha25.service.PaymentService;
 
-import io.smallrye.mutiny.Uni;
 
 @Path("/payments")
 @Produces(MediaType.APPLICATION_JSON)
@@ -17,9 +20,22 @@ public class PaymentsController {
     @Inject
     PaymentProcessorService paymentProcessorService;
 
+    @Inject
+    PaymentService paymentService;
+
     @POST
-    public Uni<Response> postPayment(PaymentRequestDTO paymentRequest) {
-    	return paymentProcessorService.processPayment(paymentRequest)
-    			.map(paymentId -> Response.ok(paymentId).build());
+    public Response postPayment(PaymentRequestDTO paymentRequest) {
+        paymentRequest.setRequestedAt(Instant.now());
+
+    	paymentProcessorService.processPayment(paymentRequest)
+            .subscribe().with(
+                paymentId ->{
+                    paymentService.savePayment(paymentRequest, paymentId);
+                },
+                failure -> {
+                    System.err.println("Failed to process payment: " + failure.getMessage());
+                });
+        
+        return Response.ok().build();
     }
 }

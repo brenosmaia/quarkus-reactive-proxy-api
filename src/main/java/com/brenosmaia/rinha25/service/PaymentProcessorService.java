@@ -46,7 +46,7 @@ public class PaymentProcessorService {
 	RedisConfig redisConfig;
 
 	public Uni<String> processPayment(PaymentRequestDTO paymentRequest) {
-		 return healthCheckService.isDefaultPaymentProcessorHealthy()
+		return healthCheckService.isDefaultPaymentProcessorHealthy()
 		 	.flatMap(isDefaultHealthy -> {
 				if (isDefaultHealthy) {
 					return defaultPaymentsProcessor.processPayment(paymentRequest);
