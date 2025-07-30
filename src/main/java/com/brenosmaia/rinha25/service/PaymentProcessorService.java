@@ -5,13 +5,10 @@ import jakarta.inject.Inject;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 
 import com.brenosmaia.rinha25.client.DefaultPaymentProcessorClient;
-import com.brenosmaia.rinha25.client.DefaultPaymentsSummaryClient;
 import com.brenosmaia.rinha25.client.FallbackPaymentProcessorClient;
-import com.brenosmaia.rinha25.client.FallbackPaymentsSummaryClient;
 import com.brenosmaia.rinha25.config.RedisConfig;
+import com.brenosmaia.rinha25.dto.PaymentProcessResult;
 import com.brenosmaia.rinha25.dto.PaymentRequestDTO;
-import com.brenosmaia.rinha25.dto.PaymentsSummaryResponseDTO;
-import com.brenosmaia.rinha25.dto.PaymentsSummaryResponseDTO.ProcessorStatsDTO;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -29,14 +26,6 @@ public class PaymentProcessorService {
 	@RestClient
 	FallbackPaymentProcessorClient fallbackPaymentsProcessor;
 	
-	@Inject
-	@RestClient
-	DefaultPaymentsSummaryClient defaultPaymentsSummary;
-	
-	@Inject
-	@RestClient
-	FallbackPaymentsSummaryClient fallbackPaymentsSummary;
-	
 	private final ObjectMapper objectMapper = new ObjectMapper();
 
 	@Inject
@@ -45,27 +34,43 @@ public class PaymentProcessorService {
 	@Inject
 	RedisConfig redisConfig;
 
-	public Uni<String> processPayment(PaymentRequestDTO paymentRequest) {
+	public Uni<PaymentProcessResult> processPayment(PaymentRequestDTO paymentRequest) {
 		return healthCheckService.isDefaultPaymentProcessorHealthy()
-		 	.flatMap(isDefaultHealthy -> {
+			.flatMap(isDefaultHealthy -> {
 				if (isDefaultHealthy) {
-					return defaultPaymentsProcessor.processPayment(paymentRequest);
+					return defaultPaymentsProcessor.processPayment(paymentRequest)
+						.onFailure().recoverWithUni(err -> 
+							addToQueue(paymentRequest)
+								.replaceWith(new PaymentProcessResult(null, "queued"))
+						)
+						.map(result -> {
+							// If successful, mark as default
+							result.setProcessorType("default");
+							return result;
+						});
 				}
-
 				return tryFallbackOrQueue(paymentRequest);
 			});
 	}
 
-	private Uni<String> tryFallbackOrQueue(PaymentRequestDTO paymentRequest) {
+	private Uni<PaymentProcessResult> tryFallbackOrQueue(PaymentRequestDTO paymentRequest) {
 		return healthCheckService.isFallbackPaymentProcessorHealthy()
 			.flatMap(isFallbackHealthy -> {
 				if (isFallbackHealthy) {
-					return fallbackPaymentsProcessor.processPayment(paymentRequest);
+					return fallbackPaymentsProcessor.processPayment(paymentRequest)
+						.onFailure().recoverWithUni(err -> 
+							addToQueue(paymentRequest)
+								.replaceWith(new PaymentProcessResult(null, "queued"))
+						)
+						.map(result -> {
+							// If successful, mark as fallback
+							result.setProcessorType("fallback");
+							return result;
+						});
 				} else {
 					return addToQueue(paymentRequest)
-						.replaceWith("Payment queued for later processing");
+						.replaceWith(new PaymentProcessResult(null, "queued"));
 				}
-				
 			});
 	}
 
@@ -79,14 +84,5 @@ public class PaymentProcessorService {
 		} catch (JsonProcessingException e) {
 			return Uni.createFrom().failure(new RuntimeException("Failed to serialize PaymentRequestDTO to JSON", e));
 		}
-	}
-	
-	public Uni<PaymentsSummaryResponseDTO> getPaymentsSummary(String from, String to) {
-		Uni<ProcessorStatsDTO> defaultStats = defaultPaymentsSummary.getPaymentsSummary(from, to, "123");
-		Uni<ProcessorStatsDTO> fallbackStats = fallbackPaymentsSummary.getPaymentsSummary(from, to, "123");
-			
-		return Uni.combine().all().unis(defaultStats, fallbackStats)
-			        .asTuple()
-			        .map(tuple -> new PaymentsSummaryResponseDTO(tuple.getItem1(), tuple.getItem2()));
 	}
 }

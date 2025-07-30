@@ -6,6 +6,7 @@ import java.util.logging.Logger;
 import com.brenosmaia.rinha25.config.RedisConfig;
 import com.brenosmaia.rinha25.dto.PaymentRequestDTO;
 import com.brenosmaia.rinha25.service.PaymentProcessorService;
+import com.brenosmaia.rinha25.service.PaymentService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -27,6 +28,9 @@ public class PaymentsProcessorWorker {
     @Inject
     PaymentProcessorService paymentProcessorService;
 
+    @Inject
+    PaymentService paymentService;
+
     @Scheduled(every = "5s")
     public void processQueue() {
         try {
@@ -44,7 +48,15 @@ public class PaymentsProcessorWorker {
                     dataList.forEach(data -> {
                         try {
                             PaymentRequestDTO paymentRequest = objectMapper.readValue(data, PaymentRequestDTO.class);
-                            paymentProcessorService.processPayment(paymentRequest);
+                            paymentProcessorService.processPayment(paymentRequest)
+                                .subscribe().with(
+                                    result -> {
+                                        paymentService.savePayment(paymentRequest, result.getPaymentId(), result.getProcessorType());
+                                    },
+                                    failure -> {
+                                        logger.severe("Failed to process payment from queue: " + failure.getMessage());
+                                    }
+                                );
                         } catch (JsonProcessingException e) {
                             logger.severe("Error parsing payment data: " + e.getMessage());
                         }

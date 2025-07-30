@@ -1,5 +1,6 @@
 package com.brenosmaia.rinha25.dto;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import jakarta.validation.constraints.NotBlank;
 
@@ -9,7 +10,7 @@ public class PaymentRequestDTO {
     private String correlationId;
     
     @NotBlank(message = "Amount is required")
-    private String amount;
+    private BigDecimal amount;
 
     @NotBlank(message = "RequestedAt is required")
     private Instant requestedAt;
@@ -17,7 +18,7 @@ public class PaymentRequestDTO {
     public PaymentRequestDTO() {
     }
 
-    public PaymentRequestDTO(String correlationId, String amount, Instant requestedAt) {
+    public PaymentRequestDTO(String correlationId, BigDecimal amount, Instant requestedAt) {
         this.correlationId = correlationId;
         this.amount = amount;
         this.requestedAt = requestedAt;
@@ -31,11 +32,11 @@ public class PaymentRequestDTO {
         this.correlationId = correlationId;
     }
 
-    public String getAmount() {
+    public BigDecimal getAmount() {
         return amount;
     }
 
-    public void setAmount(String amount) {
+    public void setAmount(BigDecimal amount) {
         this.amount = amount;
     }
 
