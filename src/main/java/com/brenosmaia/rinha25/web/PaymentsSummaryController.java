@@ -4,7 +4,7 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import com.brenosmaia.rinha25.dto.PaymentsSummaryResponseDTO;
-import com.brenosmaia.rinha25.service.PaymentProcessorService;
+import com.brenosmaia.rinha25.service.PaymentService;
 
 import io.smallrye.mutiny.Uni;
 
@@ -13,10 +13,10 @@ import io.smallrye.mutiny.Uni;
 public class PaymentsSummaryController {
 
     @Inject
-    PaymentProcessorService paymentProcessorService;
+    PaymentService paymentService;
 
     @GET
     public Uni<PaymentsSummaryResponseDTO> getPaymentsSummary(@QueryParam("from") String from, @QueryParam("to") String to) {
-        return paymentProcessorService.getPaymentsSummary(from, to);
+        return paymentService.getPaymentsSummary(from, to);
     }
 }

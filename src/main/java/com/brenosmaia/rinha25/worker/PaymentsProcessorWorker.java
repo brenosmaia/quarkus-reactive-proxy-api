@@ -20,7 +20,9 @@ public class PaymentsProcessorWorker {
     private static final String PAYMENTS_QUEUE = "paymentsQueue";
     
     private final Logger logger = Logger.getLogger(PaymentsProcessorWorker.class.getName());
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    
+    @Inject
+    ObjectMapper objectMapper;
     
     @Inject
     private RedisConfig redisConfig;
@@ -51,7 +53,7 @@ public class PaymentsProcessorWorker {
                             paymentProcessorService.processPayment(paymentRequest)
                                 .subscribe().with(
                                     result -> {
-                                        paymentService.savePayment(paymentRequest, result.getPaymentId(), result.getProcessorType());
+                                        paymentService.savePayment(paymentRequest, result.getCorrelationId(), result.getProcessorType());
                                     },
                                     failure -> {
                                         logger.severe("Failed to process payment from queue: " + failure.getMessage());

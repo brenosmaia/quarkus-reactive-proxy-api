@@ -2,7 +2,6 @@ package com.brenosmaia.rinha25.service;
 
 import com.brenosmaia.rinha25.dto.PaymentRequestDTO;
 import com.brenosmaia.rinha25.dto.PaymentsSummaryResponseDTO;
-import com.brenosmaia.rinha25.dto.PaymentsSummaryResponseDTO.ProcessorStatsDTO;
 import com.brenosmaia.rinha25.repository.PaymentRepository;
 
 import io.smallrye.mutiny.Uni;
@@ -20,11 +19,8 @@ public class PaymentService {
     }
 
     public Uni<PaymentsSummaryResponseDTO> getPaymentsSummary(String from, String to) {
-		Uni<ProcessorStatsDTO> defaultStats = paymentRepository.getPaymentsSummary(from, to);
-		Uni<ProcessorStatsDTO> fallbackStats = paymentRepository.getPaymentsSummary(from, to);
+		Uni<PaymentsSummaryResponseDTO> paymentsSummary = paymentRepository.getPaymentsSummary(from, to);
 			
-		return Uni.combine().all().unis(defaultStats, fallbackStats)
-			        .asTuple()
-			        .map(tuple -> new PaymentsSummaryResponseDTO(tuple.getItem1(), tuple.getItem2()));
+		return paymentsSummary;
 	}
 } 

@@ -6,7 +6,7 @@ import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
 import io.smallrye.mutiny.Uni;
 
 import com.brenosmaia.rinha25.dto.HealthCheckResponseDTO;
-import com.brenosmaia.rinha25.dto.PaymentProcessResult;
+import com.brenosmaia.rinha25.dto.PaymentProcessResultDTO;
 import com.brenosmaia.rinha25.dto.PaymentRequestDTO;
 
 @Path("/payments")
@@ -16,7 +16,7 @@ public interface FallbackPaymentProcessorClient {
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    Uni<PaymentProcessResult> processPayment(PaymentRequestDTO paymentRequest);
+    Uni<PaymentProcessResultDTO> processPayment(PaymentRequestDTO paymentRequest);
 
     @GET
     @Produces(MediaType.APPLICATION_JSON)

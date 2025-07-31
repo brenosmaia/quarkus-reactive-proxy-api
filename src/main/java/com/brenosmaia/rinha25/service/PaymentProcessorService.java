@@ -7,7 +7,7 @@ import org.eclipse.microprofile.rest.client.inject.RestClient;
 import com.brenosmaia.rinha25.client.DefaultPaymentProcessorClient;
 import com.brenosmaia.rinha25.client.FallbackPaymentProcessorClient;
 import com.brenosmaia.rinha25.config.RedisConfig;
-import com.brenosmaia.rinha25.dto.PaymentProcessResult;
+import com.brenosmaia.rinha25.dto.PaymentProcessResultDTO;
 import com.brenosmaia.rinha25.dto.PaymentRequestDTO;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -26,7 +26,8 @@ public class PaymentProcessorService {
 	@RestClient
 	FallbackPaymentProcessorClient fallbackPaymentsProcessor;
 	
-	private final ObjectMapper objectMapper = new ObjectMapper();
+	@Inject
+    ObjectMapper objectMapper;
 
 	@Inject
 	HealthCheckService healthCheckService;
@@ -34,14 +35,14 @@ public class PaymentProcessorService {
 	@Inject
 	RedisConfig redisConfig;
 
-	public Uni<PaymentProcessResult> processPayment(PaymentRequestDTO paymentRequest) {
+	public Uni<PaymentProcessResultDTO> processPayment(PaymentRequestDTO paymentRequest) {
 		return healthCheckService.isDefaultPaymentProcessorHealthy()
 			.flatMap(isDefaultHealthy -> {
 				if (isDefaultHealthy) {
 					return defaultPaymentsProcessor.processPayment(paymentRequest)
 						.onFailure().recoverWithUni(err -> 
 							addToQueue(paymentRequest)
-								.replaceWith(new PaymentProcessResult(null, "queued"))
+								.replaceWith(new PaymentProcessResultDTO(paymentRequest.getCorrelationId(), paymentRequest.getAmount(), "queued"))
 						)
 						.map(result -> {
 							// If successful, mark as default
@@ -53,14 +54,14 @@ public class PaymentProcessorService {
 			});
 	}
 
-	private Uni<PaymentProcessResult> tryFallbackOrQueue(PaymentRequestDTO paymentRequest) {
+	private Uni<PaymentProcessResultDTO> tryFallbackOrQueue(PaymentRequestDTO paymentRequest) {
 		return healthCheckService.isFallbackPaymentProcessorHealthy()
 			.flatMap(isFallbackHealthy -> {
 				if (isFallbackHealthy) {
 					return fallbackPaymentsProcessor.processPayment(paymentRequest)
 						.onFailure().recoverWithUni(err -> 
 							addToQueue(paymentRequest)
-								.replaceWith(new PaymentProcessResult(null, "queued"))
+								.replaceWith(new PaymentProcessResultDTO(paymentRequest.getCorrelationId(), paymentRequest.getAmount(), "queued"))
 						)
 						.map(result -> {
 							// If successful, mark as fallback
@@ -69,7 +70,7 @@ public class PaymentProcessorService {
 						});
 				} else {
 					return addToQueue(paymentRequest)
-						.replaceWith(new PaymentProcessResult(null, "queued"));
+						.replaceWith(new PaymentProcessResultDTO(paymentRequest.getCorrelationId(), paymentRequest.getAmount(), "queued"));
 				}
 			});
 	}

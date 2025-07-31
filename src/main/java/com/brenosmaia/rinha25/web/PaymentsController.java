@@ -26,12 +26,11 @@ public class PaymentsController {
     @POST
     public Response postPayment(PaymentRequestDTO paymentRequest) {
         paymentRequest.setRequestedAt(Instant.now());
-
         paymentProcessorService.processPayment(paymentRequest)
             .subscribe().with(
                 result -> {
                     // Save with processor type (e.g., "default", "fallback", "queued")
-                    paymentService.savePayment(paymentRequest, result.getPaymentId(), result.getProcessorType());
+                    paymentService.savePayment(paymentRequest, result.getCorrelationId(), result.getProcessorType());
                 },
                 failure -> {
                     System.err.println("Failed to process payment: " + failure.getMessage());

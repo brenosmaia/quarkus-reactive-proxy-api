@@ -17,7 +17,9 @@ import jakarta.inject.Inject;
 public class PaymentRepository {
     private static final String DEFAULT_PAYMENTS_PROCESSED_KEY = "defaultPaymentsProcessed";
     private static final String FALLBACK_PAYMENTS_PROCESSED_KEY = "fallbackPaymentsProcessed";
-    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Inject
+    ObjectMapper objectMapper;
 
     @Inject
 	RedisConfig redisConfig;
