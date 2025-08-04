@@ -1,24 +1,18 @@
-package com.brenosmaia.rinha25.dto;
+package com.brenosmaia.rinha25.model;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import jakarta.validation.constraints.NotBlank;
 
-public class PaymentRequestDTO {
+public class Payment {
 
-    @NotBlank(message = "Correlation ID is required")
     private String correlationId;
-    
-    @NotBlank(message = "Amount is required")
     private BigDecimal amount;
+    private Instant requestedAt;
 
-
-    public PaymentRequestDTO() {
-    }
-
-    public PaymentRequestDTO(String correlationId, BigDecimal amount, Instant requestedAt) {
+    public Payment(String correlationId, BigDecimal amount, Instant requestedAt) {
         this.correlationId = correlationId;
         this.amount = amount;
+        this.requestedAt = requestedAt;
     }
 
     public String getCorrelationId() {
@@ -35,5 +29,13 @@ public class PaymentRequestDTO {
 
     public void setAmount(BigDecimal amount) {
         this.amount = amount;
+    }
+
+    public Instant getRequestedAt() {
+        return requestedAt;
+    }
+
+    public void setRequestedAt(Instant requestedAt) {
+        this.requestedAt = requestedAt;
     }
 }

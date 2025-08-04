@@ -7,6 +7,7 @@ import com.brenosmaia.rinha25.config.RedisConfig;
 import com.brenosmaia.rinha25.dto.PaymentRequestDTO;
 import com.brenosmaia.rinha25.dto.PaymentsSummaryResponseDTO;
 import com.brenosmaia.rinha25.dto.PaymentsSummaryResponseDTO.ProcessorStatsDTO;
+import com.brenosmaia.rinha25.model.Payment;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.smallrye.mutiny.Uni;
@@ -24,7 +25,7 @@ public class PaymentRepository {
     @Inject
 	RedisConfig redisConfig;
 
-    public Uni<PaymentRequestDTO> save(PaymentRequestDTO payment, String paymentId, String processorType) {
+    public Uni<Payment> save(Payment payment, String paymentId, String processorType) {
         try {
             String json = objectMapper.writeValueAsString(payment);
             String key = "default".equals(processorType) ? DEFAULT_PAYMENTS_PROCESSED_KEY : FALLBACK_PAYMENTS_PROCESSED_KEY;

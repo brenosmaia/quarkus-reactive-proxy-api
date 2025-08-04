@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.logging.Logger;
 
 import com.brenosmaia.rinha25.config.RedisConfig;
-import com.brenosmaia.rinha25.dto.PaymentRequestDTO;
+import com.brenosmaia.rinha25.model.Payment;
 import com.brenosmaia.rinha25.service.PaymentProcessorService;
 import com.brenosmaia.rinha25.service.PaymentService;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -49,11 +49,11 @@ public class PaymentsProcessorWorker {
 
                     dataList.forEach(data -> {
                         try {
-                            PaymentRequestDTO paymentRequest = objectMapper.readValue(data, PaymentRequestDTO.class);
-                            paymentProcessorService.processPayment(paymentRequest)
+                            Payment payment = objectMapper.readValue(data, Payment.class);
+                            paymentProcessorService.processPayment(payment)
                                 .subscribe().with(
                                     result -> {
-                                        paymentService.savePayment(paymentRequest, result.getCorrelationId(), result.getProcessorType());
+                                        paymentService.savePayment(payment, result.getCorrelationId(), result.getProcessorType());
                                     },
                                     failure -> {
                                         logger.severe("Failed to process payment from queue: " + failure.getMessage());
