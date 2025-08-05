@@ -35,8 +35,11 @@ public class PaymentsController {
         paymentProcessorService.processPayment(payment)
             .subscribe().with(
                 result -> {
-                    // Save with processor type (e.g., "default", "fallback", "queued")
-                    paymentService.savePayment(payment, result.getCorrelationId(), result.getProcessorType());
+                    paymentService.savePayment(payment, result.getCorrelationId(), result.getProcessorType())
+                        .subscribe().with(
+                            saved -> {}, 
+                            error -> System.err.println("Error saving payment to Redis: " + error)
+                        );
                 },
                 failure -> {
                     System.err.println("Failed to process payment: " + failure.getMessage());

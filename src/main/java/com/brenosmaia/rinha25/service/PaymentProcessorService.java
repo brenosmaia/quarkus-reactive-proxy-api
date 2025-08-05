@@ -45,7 +45,6 @@ public class PaymentProcessorService {
 								.replaceWith(new PaymentProcessResultDTO(payment.getCorrelationId(), payment.getAmount(), "queued"))
 						)
 						.map(result -> {
-							// If successful, mark as default
 							result.setProcessorType("default");
 							return result;
 						});
