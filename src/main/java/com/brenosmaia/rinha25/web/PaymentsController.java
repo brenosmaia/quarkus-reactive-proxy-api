@@ -35,11 +35,14 @@ public class PaymentsController {
         paymentProcessorService.processPayment(payment)
             .subscribe().with(
                 result -> {
-                    paymentService.savePayment(payment, result.getCorrelationId(), result.getProcessorType())
-                        .subscribe().with(
-                            saved -> {}, 
-                            error -> System.err.println("Error saving payment to Redis: " + error)
-                        );
+                    if (!"queued".equals(result.getProcessorType()) && result.getCorrelationId() != null) {
+                        paymentService.savePayment(payment, result.getCorrelationId(), result.getProcessorType())
+                            .subscribe().with(
+                                saved -> {},
+                                error -> System.err.println("Error saving payment to Redis: " + error)
+                            );
+                    }
+                    // Se for queued, não salva como processado (já foi enfileirado em addToQueue)
                 },
                 failure -> {
                     System.err.println("Failed to process payment: " + failure.getMessage());

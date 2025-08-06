@@ -16,7 +16,7 @@ import io.smallrye.mutiny.Uni;
 
 @ApplicationScoped
 public class PaymentProcessorService {
-	private static final String PAYMENT_QUEUE_KEY = "paymentQueue";
+	private static final String PAYMENT_QUEUE_KEY = "paymentsQueue";
 
 	@Inject
 	@RestClient
@@ -53,7 +53,7 @@ public class PaymentProcessorService {
 			});
 	}
 
-	private Uni<PaymentProcessResultDTO> tryFallbackOrQueue(Payment payment) {
+	public Uni<PaymentProcessResultDTO> tryFallbackOrQueue(Payment payment) {
 		return healthCheckService.isFallbackPaymentProcessorHealthy()
 			.flatMap(isFallbackHealthy -> {
 				if (isFallbackHealthy) {
@@ -82,7 +82,7 @@ public class PaymentProcessorService {
 				.lpush(PAYMENT_QUEUE_KEY, json)
 				.replaceWithVoid();
 		} catch (JsonProcessingException e) {
-			return Uni.createFrom().failure(new RuntimeException("Failed to serialize PaymentRequestDTO to JSON", e));
+			return Uni.createFrom().failure(new RuntimeException("Failed to serialize Payment to JSON", e));
 		}
 	}
 }

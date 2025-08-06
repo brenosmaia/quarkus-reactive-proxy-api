@@ -1,21 +1,24 @@
 package com.brenosmaia.rinha25.worker;
 
-import java.util.List;
 import java.util.logging.Logger;
 
 import com.brenosmaia.rinha25.config.RedisConfig;
+import com.brenosmaia.rinha25.dto.PaymentProcessResultDTO;
 import com.brenosmaia.rinha25.model.Payment;
+import com.brenosmaia.rinha25.service.HealthCheckService;
 import com.brenosmaia.rinha25.service.PaymentProcessorService;
 import com.brenosmaia.rinha25.service.PaymentService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import io.quarkus.scheduler.Scheduled;
+import io.quarkus.runtime.Startup;
 import io.smallrye.mutiny.Uni;
+import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 @ApplicationScoped
+@Startup
 public class PaymentsProcessorWorker {
     private static final String PAYMENTS_QUEUE = "paymentsQueue";
     
@@ -33,48 +36,91 @@ public class PaymentsProcessorWorker {
     @Inject
     PaymentService paymentService;
 
-    @Scheduled(every = "5s")
-    public void processQueue() {
-        try {
-            // Recuperar uma lista de itens da fila
-            Uni<List<String>> paymentDataList = redisConfig.getReactiveRedisDataSource()
-                .list(String.class, String.class)
-                .lrange(PAYMENTS_QUEUE, 0, -1);
+    @Inject
+    HealthCheckService healthCheckService;
 
-            paymentDataList.subscribe().with(
-                dataList -> {
-                    if (dataList.isEmpty()) {
-                        return;
+    @PostConstruct
+    void init() {
+        healthCheckService.setOnProcessorHealthyCallback(this::processQueue);
+    }
+
+    public void processQueue() {
+        processNextPayment();
+    }
+
+    private void processNextPayment() {
+        redisConfig.getReactiveRedisDataSource()
+            .list(String.class, String.class)
+            .lindex(PAYMENTS_QUEUE, 0)
+            .subscribe().with(
+                data -> {
+                    if (data == null) {
+                        return; // Fila vazia
                     }
 
-                    dataList.forEach(data -> {
-                        try {
-                            Payment payment = objectMapper.readValue(data, Payment.class);
-                            paymentProcessorService.processPayment(payment)
-                                .subscribe().with(
+                    Uni.combine().all().unis(
+                        healthCheckService.isDefaultPaymentProcessorHealthy(),
+                        healthCheckService.isFallbackPaymentProcessorHealthy()
+                    ).asTuple().subscribe().with(
+                        healthTuple -> {
+                            boolean defaultHealthy = healthTuple.getItem1();
+                            boolean fallbackHealthy = healthTuple.getItem2();
+
+                            try {
+                                Payment payment = objectMapper.readValue(data, Payment.class);
+
+                                Uni<PaymentProcessResultDTO> processUni;
+                                if (defaultHealthy) {
+                                    processUni = paymentProcessorService.processPayment(payment);
+                                } else if (fallbackHealthy) {
+                                    processUni = paymentProcessorService.tryFallbackOrQueue(payment);
+                                } else {
+                                    return;
+                                }
+
+                                processUni.subscribe().with(
                                     result -> {
-                                        paymentService.savePayment(payment, result.getCorrelationId(), result.getProcessorType());
+                                        System.out.println("Processamento bem-sucedido, salvando no Redis...");
+                                        paymentService.savePayment(payment, result.getCorrelationId(), result.getProcessorType())
+                                            .subscribe().with(
+                                                saved -> {
+                                                    System.out.println("Salvamento bem-sucedido, removendo da fila. PAYMENTS_QUEUE=" + PAYMENTS_QUEUE);
+                                                    redisConfig.getReactiveRedisDataSource()
+                                                        .list(String.class, String.class)
+                                                        .lpop(PAYMENTS_QUEUE)
+                                                        .subscribe().with(
+                                                            poppedValue -> {
+                                                                System.out.println("Item removido com sucesso: " + poppedValue);
+                                                                processNextPayment();
+                                                            },
+                                                            error -> logger.severe("Error removing item from queue: " + error)
+                                                        );
+                                                },
+                                                error -> logger.severe("Error saving to Redis: " + error)
+                                            );
                                     },
                                     failure -> {
-                                        logger.severe("Failed to process payment from queue: " + failure.getMessage());
+                                        logger.severe("Error processing payment from queue: " + failure);
+                                        // Não remove da fila em caso de falha
+                                        // processNextPayment() não é chamado, então a fila fica parada
                                     }
                                 );
-                        } catch (JsonProcessingException e) {
-                            logger.severe("Error parsing payment data: " + e.getMessage());
-                        }
-                    });
-
-                    // Remover os itens processados da fila
-                    redisConfig.getReactiveRedisDataSource()
-                        .list(String.class, String.class)
-                        .ltrim(PAYMENTS_QUEUE, dataList.size(), -1);
+                            } catch (JsonProcessingException e) {
+                                logger.severe("Error deserializing payment: " + e.getMessage());
+                                // Remove invalid item from queue
+                                redisConfig.getReactiveRedisDataSource()
+                                    .list(String.class, String.class)
+                                    .lpop(PAYMENTS_QUEUE)
+                                    .subscribe().with(
+                                        ignored -> processNextPayment(),
+                                        error -> logger.severe("Error removing invalid item from queue: " + error)
+                                    );
+                            }
+                        },
+                        failure -> logger.severe("Error checking health of processors: " + failure)
+                    );
                 },
-                failure -> {
-                    logger.severe("Error recovering payments: " + failure.getMessage());
-                }
+                failure -> logger.severe("Error retrieving payment from queue: " + failure)
             );
-        } catch (Exception e) {
-            logger.severe("Error processing payment queue: " + e.getMessage());
-        }
     }
 }

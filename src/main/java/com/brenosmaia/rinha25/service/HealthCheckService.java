@@ -29,6 +29,14 @@ public class HealthCheckService {
     @Inject
     RedisConfig redisConfig;
 	
+    private Runnable onProcessorHealthyCallback;
+
+    public void setOnProcessorHealthyCallback(Runnable callback) {
+        this.onProcessorHealthyCallback = () -> {
+            callback.run();
+        };
+    }
+
     public Uni<Boolean> isDefaultPaymentProcessorHealthy() {
         return Uni.createFrom().item(DEFAULT_PAYMENT_PROCESSOR_HEALTHY);
     }
@@ -47,31 +55,46 @@ public class HealthCheckService {
 
         defaultPaymentsProcessor.getHealth().subscribe().with(
             healthResponse -> {
+                boolean previousHealthy = DEFAULT_PAYMENT_PROCESSOR_HEALTHY;
                 boolean isHealthy = healthResponse != null && !healthResponse.isFailing();
+                DEFAULT_PAYMENT_PROCESSOR_HEALTHY = isHealthy;
+
                 redisConfig.getReactiveRedisDataSource()
                     .value(String.class, Boolean.class)
                     .set("DEFAULT_PAYMENT_PROCESSOR_HEALTHY", isHealthy);
+
+                if (!previousHealthy && isHealthy && onProcessorHealthyCallback != null) {
+                    System.out.println("Callback de processor healthy chamado!");
+                    onProcessorHealthyCallback.run();
+                }
             },
             failure -> {
+                DEFAULT_PAYMENT_PROCESSOR_HEALTHY = false;
                 redisConfig.getReactiveRedisDataSource()
                     .value(String.class, Boolean.class)
                     .set("DEFAULT_PAYMENT_PROCESSOR_HEALTHY", false);
-                System.err.println("Default processor health check failed: " + failure.getMessage());
             }
         );
 
         fallbackPaymentsProcessor.getHealth().subscribe().with(
             healthResponse -> {
+                boolean previousHealthy = FALLBACK_PAYMENT_PROCESSOR_HEALTHY;
                 boolean isHealthy = healthResponse != null && !healthResponse.isFailing();
+                FALLBACK_PAYMENT_PROCESSOR_HEALTHY = isHealthy;
+
                 redisConfig.getReactiveRedisDataSource()
                     .value(String.class, Boolean.class)
                     .set("FALLBACK_PAYMENT_PROCESSOR_HEALTHY", isHealthy);
+
+                if (!previousHealthy && isHealthy && onProcessorHealthyCallback != null) {
+                    onProcessorHealthyCallback.run();
+                }
             },
             failure -> {
+                FALLBACK_PAYMENT_PROCESSOR_HEALTHY = false;
                 redisConfig.getReactiveRedisDataSource()
                     .value(String.class, Boolean.class)
                     .set("FALLBACK_PAYMENT_PROCESSOR_HEALTHY", false);
-                System.err.println("Fallback processor health check failed: " + failure.getMessage());
             }
         );
     }
