@@ -80,17 +80,14 @@ public class PaymentsProcessorWorker {
 
                                 processUni.subscribe().with(
                                     result -> {
-                                        System.out.println("Processamento bem-sucedido, salvando no Redis...");
                                         paymentService.savePayment(payment, result.getCorrelationId(), result.getProcessorType())
                                             .subscribe().with(
                                                 saved -> {
-                                                    System.out.println("Salvamento bem-sucedido, removendo da fila. PAYMENTS_QUEUE=" + PAYMENTS_QUEUE);
                                                     redisConfig.getReactiveRedisDataSource()
                                                         .list(String.class, String.class)
                                                         .lpop(PAYMENTS_QUEUE)
                                                         .subscribe().with(
                                                             poppedValue -> {
-                                                                System.out.println("Item removido com sucesso: " + poppedValue);
                                                                 processNextPayment();
                                                             },
                                                             error -> logger.severe("Error removing item from queue: " + error)

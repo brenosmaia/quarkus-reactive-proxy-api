@@ -64,7 +64,6 @@ public class HealthCheckService {
                     .set("DEFAULT_PAYMENT_PROCESSOR_HEALTHY", isHealthy);
 
                 if (!previousHealthy && isHealthy && onProcessorHealthyCallback != null) {
-                    System.out.println("Callback de processor healthy chamado!");
                     onProcessorHealthyCallback.run();
                 }
             },
