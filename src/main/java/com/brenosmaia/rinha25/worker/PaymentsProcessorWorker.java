@@ -12,7 +12,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.quarkus.runtime.Startup;
-import io.smallrye.mutiny.Uni;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -21,12 +20,12 @@ import jakarta.inject.Inject;
 @Startup
 public class PaymentsProcessorWorker {
     private static final String PAYMENTS_QUEUE = "paymentsQueue";
-    
+
     private final Logger logger = Logger.getLogger(PaymentsProcessorWorker.class.getName());
-    
+
     @Inject
     ObjectMapper objectMapper;
-    
+
     @Inject
     private RedisConfig redisConfig;
 
@@ -45,79 +44,49 @@ public class PaymentsProcessorWorker {
     }
 
     public void processQueue() {
-        processNextPayment();
-    }
+        while (true) {
+            String data = redisConfig.getRedisDataSource()
+                .list(String.class, String.class)
+                .lindex(PAYMENTS_QUEUE, 0);
 
-    private void processNextPayment() {
-        redisConfig.getReactiveRedisDataSource()
-            .list(String.class, String.class)
-            .lindex(PAYMENTS_QUEUE, 0)
-            .subscribe().with(
-                data -> {
-                    if (data == null) {
-                        return; // Fila vazia
-                    }
+            if (data == null) {
+                break;
+            }
 
-                    Uni.combine().all().unis(
-                        healthCheckService.isDefaultPaymentProcessorHealthy(),
-                        healthCheckService.isFallbackPaymentProcessorHealthy()
-                    ).asTuple().subscribe().with(
-                        healthTuple -> {
-                            boolean defaultHealthy = healthTuple.getItem1();
-                            boolean fallbackHealthy = healthTuple.getItem2();
+            boolean defaultHealthy = healthCheckService.isDefaultPaymentProcessorHealthy();
+            boolean fallbackHealthy = healthCheckService.isFallbackPaymentProcessorHealthy();
 
-                            try {
-                                Payment payment = objectMapper.readValue(data, Payment.class);
+            if (!defaultHealthy && !fallbackHealthy) {
+                break;
+            }
 
-                                Uni<PaymentProcessResultDTO> processUni;
-                                if (defaultHealthy) {
-                                    processUni = paymentProcessorService.processPayment(payment);
-                                } else if (fallbackHealthy) {
-                                    processUni = paymentProcessorService.tryFallbackOrQueue(payment);
-                                } else {
-                                    return;
-                                }
+            try {
+                Payment payment = objectMapper.readValue(data, Payment.class);
 
-                                processUni.subscribe().with(
-                                    result -> {
-                                        paymentService.savePayment(payment, result.getCorrelationId(), result.getProcessorType())
-                                            .subscribe().with(
-                                                saved -> {
-                                                    redisConfig.getReactiveRedisDataSource()
-                                                        .list(String.class, String.class)
-                                                        .lpop(PAYMENTS_QUEUE)
-                                                        .subscribe().with(
-                                                            poppedValue -> {
-                                                                processNextPayment();
-                                                            },
-                                                            error -> logger.severe("Error removing item from queue: " + error)
-                                                        );
-                                                },
-                                                error -> logger.severe("Error saving to Redis: " + error)
-                                            );
-                                    },
-                                    failure -> {
-                                        logger.severe("Error processing payment from queue: " + failure);
-                                        // Não remove da fila em caso de falha
-                                        // processNextPayment() não é chamado, então a fila fica parada
-                                    }
-                                );
-                            } catch (JsonProcessingException e) {
-                                logger.severe("Error deserializing payment: " + e.getMessage());
-                                // Remove invalid item from queue
-                                redisConfig.getReactiveRedisDataSource()
-                                    .list(String.class, String.class)
-                                    .lpop(PAYMENTS_QUEUE)
-                                    .subscribe().with(
-                                        ignored -> processNextPayment(),
-                                        error -> logger.severe("Error removing invalid item from queue: " + error)
-                                    );
-                            }
-                        },
-                        failure -> logger.severe("Error checking health of processors: " + failure)
-                    );
-                },
-                failure -> logger.severe("Error retrieving payment from queue: " + failure)
-            );
+                PaymentProcessResultDTO result;
+                if (defaultHealthy) {
+                    result = paymentProcessorService.processPayment(payment);
+                } else if (fallbackHealthy) {
+                    result = paymentProcessorService.tryFallbackOrQueue(payment);
+                } else {
+                    break;
+                }
+
+                paymentService.savePayment(payment, result.getCorrelationId(), result.getProcessorType());
+
+                redisConfig.getRedisDataSource()
+                    .list(String.class, String.class)
+                    .lpop(PAYMENTS_QUEUE);
+
+            } catch (JsonProcessingException e) {
+                logger.severe("Error deserializing payment: " + e.getMessage());
+                redisConfig.getRedisDataSource()
+                    .list(String.class, String.class)
+                    .lpop(PAYMENTS_QUEUE);
+            } catch (Exception e) {
+                logger.severe("Error processing payment from queue: " + e.getMessage());
+                break;
+            }
+        }
     }
 }

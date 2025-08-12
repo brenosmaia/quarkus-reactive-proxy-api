@@ -32,22 +32,17 @@ public class PaymentsController {
             Instant.now()
         );
 
-        paymentProcessorService.processPayment(payment)
-            .subscribe().with(
-                result -> {
-                    if (!"queued".equals(result.getProcessorType()) && result.getCorrelationId() != null) {
-                        paymentService.savePayment(payment, result.getCorrelationId(), result.getProcessorType())
-                            .subscribe().with(
-                                saved -> {},
-                                error -> System.err.println("Error saving payment to Redis: " + error)
-                            );
-                    }
-                    // Se for queued, não salva como processado (já foi enfileirado em addToQueue)
-                },
-                failure -> {
-                    System.err.println("Failed to process payment: " + failure.getMessage());
-                });
+        try {
+            var result = paymentProcessorService.processPayment(payment);
 
-        return Response.ok().build();
+            if (!"queued".equals(result.getProcessorType()) && result.getCorrelationId() != null) {
+                paymentService.savePayment(payment, result.getCorrelationId(), result.getProcessorType());
+            }
+
+            return Response.ok().build();
+        } catch (Exception e) {
+            System.err.println("Failed to process payment: " + e.getMessage());
+            return Response.serverError().build();
+        }
     }
 }

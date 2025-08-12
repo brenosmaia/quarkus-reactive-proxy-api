@@ -4,7 +4,6 @@ import com.brenosmaia.rinha25.dto.PaymentsSummaryResponseDTO;
 import com.brenosmaia.rinha25.model.Payment;
 import com.brenosmaia.rinha25.repository.PaymentRepository;
 
-import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -14,12 +13,12 @@ public class PaymentService {
     @Inject
     private PaymentRepository paymentRepository;
 
-    public Uni<Payment> savePayment(Payment payment, String paymentId, String processorType) {
+    public Payment savePayment(Payment payment, String paymentId, String processorType) {
         return paymentRepository.save(payment, paymentId, processorType);
     }
 
-    public Uni<PaymentsSummaryResponseDTO> getPaymentsSummary(String from, String to) {
-		Uni<PaymentsSummaryResponseDTO> paymentsSummary = paymentRepository.getPaymentsSummary(from, to);
+    public PaymentsSummaryResponseDTO getPaymentsSummary(String from, String to) {
+		PaymentsSummaryResponseDTO paymentsSummary = paymentRepository.getPaymentsSummary(from, to);
 			
 		return paymentsSummary;
 	}
