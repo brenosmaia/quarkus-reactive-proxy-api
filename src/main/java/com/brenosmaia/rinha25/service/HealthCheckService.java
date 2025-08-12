@@ -17,18 +17,20 @@ public class HealthCheckService {
 
     private boolean DEFAULT_PAYMENT_PROCESSOR_HEALTHY = true;
     private boolean FALLBACK_PAYMENT_PROCESSOR_HEALTHY = true;
+    private static final String KEY_DEFAULT_PAYMENT_PROCESSOR_HEALTHY = "defaultPaymentProcessorHealthy";
+    private static final String KEY_FALLBACK_PAYMENT_PROCESSOR_HEALTHY = "fallbackPaymentProcessorHealthy";
 
-	@Inject
-	@RestClient
-	DefaultPaymentProcessorClient defaultPaymentsProcessor;
-	
-	@Inject
-	@RestClient
-	FallbackPaymentProcessorClient fallbackPaymentsProcessor;
+    @Inject
+    @RestClient
+    DefaultPaymentProcessorClient defaultPaymentsProcessor;
+
+    @Inject
+    @RestClient
+    FallbackPaymentProcessorClient fallbackPaymentsProcessor;
 
     @Inject
     RedisConfig redisConfig;
-	
+
     private Runnable onProcessorHealthyCallback;
 
     public void setOnProcessorHealthyCallback(Runnable callback) {
@@ -38,16 +40,27 @@ public class HealthCheckService {
     }
 
     public Uni<Boolean> isDefaultPaymentProcessorHealthy() {
-        return Uni.createFrom().item(DEFAULT_PAYMENT_PROCESSOR_HEALTHY);
+        return Uni.createFrom().item(() -> {
+            Boolean healthy = redisConfig.getReactiveRedisDataSource()
+                .value(String.class, Boolean.class)
+                .get(KEY_DEFAULT_PAYMENT_PROCESSOR_HEALTHY)
+                .await().indefinitely();
+            return healthy != null ? healthy : false;
+        });
     }
 
     public Uni<Boolean> isFallbackPaymentProcessorHealthy() {
-        return Uni.createFrom().item(FALLBACK_PAYMENT_PROCESSOR_HEALTHY);
+        return Uni.createFrom().item(() -> {
+            Boolean healthy = redisConfig.getReactiveRedisDataSource()
+                .value(String.class, Boolean.class)
+                .get(KEY_FALLBACK_PAYMENT_PROCESSOR_HEALTHY)
+                .await().indefinitely();
+            return healthy != null ? healthy : false;
+        });
     }
 
     @Scheduled(every = "5s")
     public void refreshHealthStatus() {
-        // Only execute if this is the leader instance to avoid 429 errors
         String instanceId = System.getenv("INSTANCE_ID");
         if (!"1".equals(instanceId)) {
             return;
@@ -61,7 +74,7 @@ public class HealthCheckService {
 
                 redisConfig.getReactiveRedisDataSource()
                     .value(String.class, Boolean.class)
-                    .set("DEFAULT_PAYMENT_PROCESSOR_HEALTHY", isHealthy);
+                    .set(KEY_DEFAULT_PAYMENT_PROCESSOR_HEALTHY, isHealthy);
 
                 if (!previousHealthy && isHealthy && onProcessorHealthyCallback != null) {
                     onProcessorHealthyCallback.run();
@@ -71,7 +84,7 @@ public class HealthCheckService {
                 DEFAULT_PAYMENT_PROCESSOR_HEALTHY = false;
                 redisConfig.getReactiveRedisDataSource()
                     .value(String.class, Boolean.class)
-                    .set("DEFAULT_PAYMENT_PROCESSOR_HEALTHY", false);
+                    .set(KEY_DEFAULT_PAYMENT_PROCESSOR_HEALTHY, false);
             }
         );
 
@@ -83,7 +96,7 @@ public class HealthCheckService {
 
                 redisConfig.getReactiveRedisDataSource()
                     .value(String.class, Boolean.class)
-                    .set("FALLBACK_PAYMENT_PROCESSOR_HEALTHY", isHealthy);
+                    .set(KEY_FALLBACK_PAYMENT_PROCESSOR_HEALTHY, isHealthy);
 
                 if (!previousHealthy && isHealthy && onProcessorHealthyCallback != null) {
                     onProcessorHealthyCallback.run();
@@ -93,7 +106,7 @@ public class HealthCheckService {
                 FALLBACK_PAYMENT_PROCESSOR_HEALTHY = false;
                 redisConfig.getReactiveRedisDataSource()
                     .value(String.class, Boolean.class)
-                    .set("FALLBACK_PAYMENT_PROCESSOR_HEALTHY", false);
+                    .set(KEY_FALLBACK_PAYMENT_PROCESSOR_HEALTHY, false);
             }
         );
     }

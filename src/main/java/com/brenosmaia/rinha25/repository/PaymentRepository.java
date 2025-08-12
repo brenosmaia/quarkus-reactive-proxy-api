@@ -29,9 +29,23 @@ public class PaymentRepository {
         try {
             String json = objectMapper.writeValueAsString(payment);
             String key = "default".equals(processorType) ? DEFAULT_PAYMENTS_PROCESSED_KEY : FALLBACK_PAYMENTS_PROCESSED_KEY;
+            String countKey = key + ":count";
+            String sumKey = key + ":sum";
+
+            // Salva o pagamento na lista e incrementa os contadores
             return redisConfig.getReactiveRedisDataSource()
                 .list(String.class, String.class)
                 .lpush(key, json)
+                .flatMap(unused ->
+                    redisConfig.getReactiveRedisDataSource()
+                        .value(String.class, Long.class)
+                        .incr(countKey)
+                )
+                .flatMap(unused ->
+                    redisConfig.getReactiveRedisDataSource()
+                        .value(String.class, String.class)
+                        .incrbyfloat(sumKey, payment.getAmount().doubleValue())
+                )
                 .replaceWith(payment);
         } catch (Exception e) {
             System.err.println("Error saving payment: " + e.getMessage());
@@ -40,54 +54,46 @@ public class PaymentRepository {
     }
 
     public Uni<PaymentsSummaryResponseDTO> getPaymentsSummary(String from, String to) {
-        Uni<List<String>> defaultPaymentsUni = redisConfig.getReactiveRedisDataSource()
-            .list(String.class, String.class)
-            .lrange(DEFAULT_PAYMENTS_PROCESSED_KEY, 0, -1);
+        String defaultCountKey = DEFAULT_PAYMENTS_PROCESSED_KEY + ":count";
+        String defaultSumKey = DEFAULT_PAYMENTS_PROCESSED_KEY + ":sum";
+        String fallbackCountKey = FALLBACK_PAYMENTS_PROCESSED_KEY + ":count";
+        String fallbackSumKey = FALLBACK_PAYMENTS_PROCESSED_KEY + ":sum";
 
-        Uni<List<String>> fallbackPaymentsUni = redisConfig.getReactiveRedisDataSource()
-            .list(String.class, String.class)
-            .lrange(FALLBACK_PAYMENTS_PROCESSED_KEY, 0, -1);
+        Uni<Long> defaultCountUni = redisConfig.getReactiveRedisDataSource()
+            .value(String.class, Long.class)
+            .get(defaultCountKey)
+            .map(count -> count != null ? count : 0L);
 
-        return Uni.combine().all().unis(defaultPaymentsUni, fallbackPaymentsUni).asTuple()
+        Uni<Double> defaultSumUni = redisConfig.getReactiveRedisDataSource()
+            .value(String.class, String.class)
+            .get(defaultSumKey)
+            .map(sum -> sum != null ? Double.parseDouble(sum) : 0.0);
+
+        Uni<Long> fallbackCountUni = redisConfig.getReactiveRedisDataSource()
+            .value(String.class, Long.class)
+            .get(fallbackCountKey)
+            .map(count -> count != null ? count : 0L);
+
+        Uni<Double> fallbackSumUni = redisConfig.getReactiveRedisDataSource()
+            .value(String.class, String.class)
+            .get(fallbackSumKey)
+            .map(sum -> sum != null ? Double.parseDouble(sum) : 0.0);
+
+        return Uni.combine().all().unis(defaultCountUni, defaultSumUni, fallbackCountUni, fallbackSumUni).asTuple()
             .map(tuple -> {
-                List<String> defaultPayments = tuple.getItem1();
-                List<String> fallbackPayments = tuple.getItem2();
+                PaymentsSummaryResponseDTO dto = new PaymentsSummaryResponseDTO();
 
-                PaymentsSummaryResponseDTO processorStats = new PaymentsSummaryResponseDTO();
+                PaymentsSummaryResponseDTO.ProcessorStatsDTO defaultStats = new PaymentsSummaryResponseDTO.ProcessorStatsDTO();
+                defaultStats.setTotalRequests(tuple.getItem1().intValue());
+                defaultStats.setTotalAmount(BigDecimal.valueOf(tuple.getItem2()));
+                dto.setDefaultStats(defaultStats);
 
-                ProcessorStatsDTO defaultStats = new ProcessorStatsDTO();
-                defaultStats.setTotalRequests(defaultPayments.size());
-                BigDecimal defaultTotalAmount = defaultPayments.stream()
-                    .map(payment -> {
-                        try {
-                            BigDecimal amount = objectMapper.readValue(payment, PaymentRequestDTO.class).getAmount();
-                            return amount != null ? amount : BigDecimal.ZERO;
-                        } catch (Exception e) {
-                            System.err.println("Error parsing payment [" + payment + "]: " + e.getMessage());
-                            return BigDecimal.ZERO;
-                        }
-                    })
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-                defaultStats.setTotalAmount(defaultTotalAmount);
-                processorStats.setDefaultStats(defaultStats);
+                PaymentsSummaryResponseDTO.ProcessorStatsDTO fallbackStats = new PaymentsSummaryResponseDTO.ProcessorStatsDTO();
+                fallbackStats.setTotalRequests(tuple.getItem3().intValue());
+                fallbackStats.setTotalAmount(BigDecimal.valueOf(tuple.getItem4()));
+                dto.setFallbackStats(fallbackStats);
 
-                ProcessorStatsDTO fallbackStats = new ProcessorStatsDTO();
-                fallbackStats.setTotalRequests(fallbackPayments.size());
-                BigDecimal fallbackTotalAmount = fallbackPayments.stream()
-                    .map(payment -> {
-                        try {
-                            BigDecimal amount = objectMapper.readValue(payment, PaymentRequestDTO.class).getAmount();
-                            return amount != null ? amount : BigDecimal.ZERO;
-                        } catch (Exception e) {
-                            System.err.println("Error parsing payment [" + payment + "]: " + e.getMessage());
-                            return BigDecimal.ZERO;
-                        }
-                    })
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-                fallbackStats.setTotalAmount(fallbackTotalAmount);
-                processorStats.setFallbackStats(fallbackStats);
-
-                return processorStats;
+                return dto;
             });
     }
 }

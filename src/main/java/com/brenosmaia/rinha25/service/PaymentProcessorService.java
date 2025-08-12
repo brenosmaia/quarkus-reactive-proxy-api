@@ -40,16 +40,13 @@ public class PaymentProcessorService {
 			.flatMap(isDefaultHealthy -> {
 				if (isDefaultHealthy) {
 					return defaultPaymentsProcessor.processPayment(payment)
-						.onFailure().recoverWithUni(err -> 
-							addToQueue(payment)
-								.replaceWith(new PaymentProcessResultDTO(payment.getCorrelationId(), payment.getAmount(), "queued"))
-						)
-						.map(result -> {
-							result.setProcessorType("default");
-							return result;
-						});
+						.map(unused -> new PaymentProcessResultDTO(payment.getCorrelationId(), payment.getAmount(), "default"))
+						.onFailure().recoverWithUni(err ->
+							tryFallbackOrQueue(payment)
+						);
+				} else {
+					return tryFallbackOrQueue(payment);
 				}
-				return tryFallbackOrQueue(payment);
 			});
 	}
 
@@ -58,15 +55,11 @@ public class PaymentProcessorService {
 			.flatMap(isFallbackHealthy -> {
 				if (isFallbackHealthy) {
 					return fallbackPaymentsProcessor.processPayment(payment)
+						.map(unused -> new PaymentProcessResultDTO(payment.getCorrelationId(), payment.getAmount(), "fallback"))
 						.onFailure().recoverWithUni(err -> 
 							addToQueue(payment)
 								.replaceWith(new PaymentProcessResultDTO(payment.getCorrelationId(), payment.getAmount(), "queued"))
-						)
-						.map(result -> {
-							// If successful, mark as fallback
-							result.setProcessorType("fallback");
-							return result;
-						});
+						);
 				} else {
 					return addToQueue(payment)
 						.replaceWith(new PaymentProcessResultDTO(payment.getCorrelationId(), payment.getAmount(), "queued"));
