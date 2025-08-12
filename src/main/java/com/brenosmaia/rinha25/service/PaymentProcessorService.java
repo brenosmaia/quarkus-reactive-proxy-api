@@ -12,67 +12,77 @@ import com.brenosmaia.rinha25.model.Payment;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import io.smallrye.mutiny.Uni;
+
 @ApplicationScoped
 public class PaymentProcessorService {
-    private static final String PAYMENT_QUEUE_KEY = "paymentsQueue";
+	private static final String PAYMENT_QUEUE_KEY = "paymentsQueue";
 
-    @Inject
-    @RestClient
-    DefaultPaymentProcessorClient defaultPaymentsProcessor;
-
-    @Inject
-    @RestClient
-    FallbackPaymentProcessorClient fallbackPaymentsProcessor;
-
-    @Inject
+	@Inject
+	@RestClient
+	DefaultPaymentProcessorClient defaultPaymentsProcessor;
+	
+	@Inject
+	@RestClient
+	FallbackPaymentProcessorClient fallbackPaymentsProcessor;
+	
+	@Inject
     ObjectMapper objectMapper;
 
-    @Inject
-    HealthCheckService healthCheckService;
+	@Inject
+	HealthCheckService healthCheckService;
 
-    @Inject
-    RedisConfig redisConfig;
+	@Inject
+	RedisConfig redisConfig;
 
-    public PaymentProcessResultDTO processPayment(Payment payment) {
-        boolean isDefaultHealthy = healthCheckService.isDefaultPaymentProcessorHealthy();
-        if (isDefaultHealthy) {
-            try {
-                defaultPaymentsProcessor.processPayment(payment);
-				PaymentProcessResultDTO result = new PaymentProcessResultDTO(payment.getCorrelationId(), payment.getAmount(), "default");
-                return result;
-            } catch (Exception err) {
-                 return tryFallbackOrQueue(payment);
-            }
-        }
+	public Uni<PaymentProcessResultDTO> processPayment(Payment payment) {
+		return healthCheckService.isDefaultPaymentProcessorHealthy()
+			.flatMap(isDefaultHealthy -> {
+				if (isDefaultHealthy) {
+					return defaultPaymentsProcessor.processPayment(payment)
+						.onFailure().recoverWithUni(err -> 
+							addToQueue(payment)
+								.replaceWith(new PaymentProcessResultDTO(payment.getCorrelationId(), payment.getAmount(), "queued"))
+						)
+						.map(result -> {
+							result.setProcessorType("default");
+							return result;
+						});
+				}
+				return tryFallbackOrQueue(payment);
+			});
+	}
 
-		return null;
-    }
+	public Uni<PaymentProcessResultDTO> tryFallbackOrQueue(Payment payment) {
+		return healthCheckService.isFallbackPaymentProcessorHealthy()
+			.flatMap(isFallbackHealthy -> {
+				if (isFallbackHealthy) {
+					return fallbackPaymentsProcessor.processPayment(payment)
+						.onFailure().recoverWithUni(err -> 
+							addToQueue(payment)
+								.replaceWith(new PaymentProcessResultDTO(payment.getCorrelationId(), payment.getAmount(), "queued"))
+						)
+						.map(result -> {
+							// If successful, mark as fallback
+							result.setProcessorType("fallback");
+							return result;
+						});
+				} else {
+					return addToQueue(payment)
+						.replaceWith(new PaymentProcessResultDTO(payment.getCorrelationId(), payment.getAmount(), "queued"));
+				}
+			});
+	}
 
-    public PaymentProcessResultDTO tryFallbackOrQueue(Payment payment) {
-        boolean isFallbackHealthy = healthCheckService.isFallbackPaymentProcessorHealthy();
-        if (isFallbackHealthy) {
-            try {
-                fallbackPaymentsProcessor.processPayment(payment);
-				PaymentProcessResultDTO result = new PaymentProcessResultDTO(payment.getCorrelationId(), payment.getAmount(), "fallback");
-                return result;
-            } catch (Exception err) {
-                addToQueue(payment);
-                return new PaymentProcessResultDTO(payment.getCorrelationId(), payment.getAmount(), "queued");
-            }
-        } else {
-            addToQueue(payment);
-            return new PaymentProcessResultDTO(payment.getCorrelationId(), payment.getAmount(), "queued");
-        }
-    }
-
-    private void addToQueue(Payment payment) {
-        try {
-            String json = objectMapper.writeValueAsString(payment);
-            redisConfig.getRedisDataSource()
-                .list(String.class, String.class)
-                .lpush(PAYMENT_QUEUE_KEY, json);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException("Failed to serialize Payment to JSON", e);
-        }
-    }
+	private Uni<Void> addToQueue(Payment payment) {
+		try {
+			String json = objectMapper.writeValueAsString(payment);
+			return redisConfig.getReactiveRedisDataSource()
+				.list(String.class, String.class)
+				.lpush(PAYMENT_QUEUE_KEY, json)
+				.replaceWithVoid();
+		} catch (JsonProcessingException e) {
+			return Uni.createFrom().failure(new RuntimeException("Failed to serialize Payment to JSON", e));
+		}
+	}
 }
